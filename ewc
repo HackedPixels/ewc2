@@ -1,0 +1,247 @@
+#!/usr/bin/python3
+
+import sys
+import collections
+from ast import literal_eval
+
+class def_vars(object):
+	""" a class with all the variables """
+	valid_flags     = ['f', 'R', 'w', 'W', 'c', 'b'] # the priority in which flags are interpreted.
+	double_flags    = ['R']                # flags followed by ONE argument
+	multi_flags     = ['f']                # flags that can have multiple arguments (until the next flag)
+	necessary_flags = ['f']                # flags that have to be given
+	replace         = ['\n', '\t']         # replace these chars in normalize()
+	count_chars_exclude = [' ']            # do not count these chars in count_chars()
+	valid_string_flags  = ['bytes', 'chars']
+	double_string_flags = ['']
+	max_rows = -1
+
+class word_count(def_vars):
+	""" in this class all the functions are stored which interact with the file """
+	def load_file(self, filepath):
+		try:
+			f = open(filepath, 'r')
+		except Exception as e:
+			print("[ERR]: Could not open file.")
+			return
+
+		self.filecontent = f.read()
+		f.close()
+
+	def normalize(self, text):
+		for c in self.replace:
+			text = text.replace(c, " ")
+		return text
+
+	def count_words(self, text):
+		word_count = 0
+		for w in self.normalize(text).split(" "):
+			if len(w) == 0:
+				continue
+			else:
+				word_count += 1
+		
+		return word_count
+		
+	def count_chars(self, text):
+		char_counter = 0
+		for c in text:
+			if c not in self.count_chars_exclude:
+				char_counter += 1
+
+		return char_counter
+
+	def count_bytes(self, text):
+		return len(text)
+
+	def stat_words(self, text):
+		word_stat = {}
+		for w in self.normalize(text).split(" "):
+			if word_stat.get(w) is None:
+				word_stat[w] = 1
+			else:
+				word_stat[w] += 1
+
+		return word_stat
+	
+	def getcontent(self):
+		return self.filecontent
+
+class cmd_word_count(word_count):
+	def parse(self, args):
+		self.flags = collections.OrderedDict()
+		double_list = []
+		multi_list  = []
+		for arg in args:
+			if len(multi_list) != 0:
+				if "-" in arg:
+					del multi_list[0]
+				else:
+					self.flags[multi_list[0]].append(arg)
+
+			if len(double_list) != 0:
+				if "-" in arg:
+					print("[ERR]: Missing value for '" + str(double_list[0]) + "'!")
+					return
+				self.flags[double_list[0]] = arg
+				del double_list[0]
+				continue
+
+			if arg[0] == "-":
+				# long flag. (e.g: --input)
+				if arg[1] == "-":
+					print("string flag!")
+					
+					if arg[2:] not in self.valid_string_flags:
+						print("[ERR]: Unrecognized flag '" + str(arg[2:]) + "'")
+						return
+
+					#TODO: Add support for multi string flags.
+					if self.is_double_flag(arg[2:]) == True:
+						self.flags[arg[2:]] = ""
+						double_list.append(arg[2:])
+					else:
+						self.flags[arg[2:]] = ""
+					continue
+				
+				for a in arg[1:]:
+					if a not in self.valid_flags:
+						print("[ERR]: Unrecognized flag '" + str(a) + "'")
+						return
+					if self.is_double_flag(a) == True:
+						self.flags[a] = ""
+						double_list.append(a)
+					elif self.is_multi_flag(a) == True:
+						self.flags[a] = []
+						multi_list.append(a)
+					else:
+						self.flags[a] = ""
+					continue
+				continue
+		# check if an argument:
+		if len(double_list) != 0 and len(multi_list) != 0:
+			print("[ERR]: Not all flags got values!")
+			print("[>>>]: " + str(double_list) + str(multi_list))
+			return
+	
+	# check if a flag requires an argument.
+	def is_double_flag(self, flag):
+		if flag in self.double_flags:
+			return True
+		
+		#TODO: Add support for multi string flags.
+		# if flag in self.double_string_flags:
+		#	return True
+
+		return False
+
+	# check if a flag can have multiple arguments.
+	def is_multi_flag(self, flag):
+		if flag in self.multi_flags:
+			return True
+
+		#if flag in self.multi_string_flags:
+		#	return True
+
+		return False
+
+	def print_help(self):
+		f = open("./.help.txt", 'r')
+		for line in f:
+			#TODO: Add formatting.
+			print(line)
+		f.close()
+
+	def eval_flags(self, flags):
+		for n in self.necessary_flags:
+			if flags.get(n) is None:
+				print("[ERR]: Missing essential flag!")
+				print("[>>>]: " + n + " not found.")
+				return
+
+		#TODO: dont make dependent on 'f'
+		while len(flags.get('f')) > 0:
+			for k in self.flags:
+#				if flags.get(k) == "":
+#					print(k + ": " + "--")
+#				else:
+#					print(k  + ": " + flags.get(k))
+				print(eval("self.option_" + k + "(\"" + str(flags.get(k)) + "\")"), end="")
+			print("")
+			del flags['f'][0]
+
+	# === All the options in functions ===
+	def option_f(self, args):
+		args = literal_eval(args)
+		self.load_file(args[0])
+		self.flags["f"][0]
+		print("[INF]: Loaded '" + args[0] + "'.")
+		return ""
+
+	def option_R(self, args):
+		for c in args:
+			if ord(c) <= ord('9') and ord(c) >= ord('0'):
+				pass
+			else:
+				print("[ERR]: 'R' expects an interger.")
+				return ""
+		self.max_rows = int(args)
+		return "Max Rows: " + str(args) + "\n"
+
+	def option_w(self, args):
+		nwords = self.count_words(self.getcontent())
+		return "Words: " + str(nwords) + "\n"
+
+	def option_W(self, args):
+		#TODO: Add pretty tables.
+		statwords = self.stat_words(self.getcontent())
+#		return "Word Statistics:\n " + str(statwords) + "\n"
+
+		longest_key_len = 0
+		longest_val_len = 0
+		# detect longest key
+		for k in statwords.keys():
+			if len(str(k)) > longest_key_len:
+				longest_key_len = len(str(k))
+
+			if len(str(statwords.get(k))) > longest_val_len:
+				longest_val_len = len(str(statwords.get(k)))
+		
+		return_buffer = []
+		key_counter = 0
+		
+		if self.max_rows == 0:
+			return ""
+		if self.max_rows == -1:
+			self.max_rows = len(statwords.keys())
+
+		return_buffer.append("+" + ("=" * (longest_key_len + longest_val_len + 3 + 2)) + "+")
+
+		for k in statwords.keys():
+			if key_counter >= self.max_rows:
+				break
+			key_counter += 1
+			return_buffer.append("| " + k  + (" " * (longest_key_len - len(k))) + " | " \
+			+ (" " * (longest_val_len - len(str(statwords.get(k))))) \
+			+ str(statwords.get(k)) + " | ")
+			return_buffer.append("-" * (longest_key_len + longest_val_len + 3 + 4))
+		return_buffer[len(return_buffer) - 1] = ("+" + ("=" * (longest_key_len + longest_val_len + 3 + 2)) + "+")
+		return "\n".join(return_buffer) 
+
+	def option_bytes(self, args):
+		return self.option_b(args)
+
+	def option_b(self, args):
+		nbytes = self.count_bytes(self.getcontent())
+		return "Bytes: " + str(nbytes) + "\n"
+
+	def option_chars(self, args):
+		return self.option_c(args)
+
+	def option_c(self, args):
+		nchars = self.count_chars(self.getcontent())
+		return "Chars: " + str(nchars) + "\n"
+
+cmd = cmd_word_count()
+cmd.parse(sys.argv)
+cmd.eval_flags(cmd.flags)
