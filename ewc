@@ -6,14 +6,18 @@ from ast import literal_eval
 
 class def_vars(object):
 	""" a class with all the variables """
-	valid_flags     = ['f', 'R', 'w', 'W', 'c', 'b'] # the priority in which flags are interpreted.
+	valid_flags     = ['f', 'R', 'w', 'W', 'c', 'b', 'h'] # the priority in which flags are interpreted.
 	double_flags    = ['R']                # flags followed by ONE argument
 	multi_flags     = ['f']                # flags that can have multiple arguments (until the next flag)
 	necessary_flags = ['f']                # flags that have to be given
 	replace         = ['\n', '\t']         # replace these chars in normalize()
 	count_chars_exclude = [' ']            # do not count these chars in count_chars()
-	valid_string_flags  = ['bytes', 'chars']
-	double_string_flags = ['']
+	valid_string_flags  = ['bytes', 'chars', 'max-rows', 'help']
+	double_string_flags = ['max-rows']
+
+	# only for help, version etc
+	special_flags = ['h']
+	special_string_flags = ['help']
 	max_rows = -1
 
 class word_count(def_vars):
@@ -82,7 +86,7 @@ class cmd_word_count(word_count):
 			if len(double_list) != 0:
 				if "-" in arg:
 					print("[ERR]: Missing value for '" + str(double_list[0]) + "'!")
-					return
+					return 1
 				self.flags[double_list[0]] = arg
 				del double_list[0]
 				continue
@@ -94,12 +98,18 @@ class cmd_word_count(word_count):
 					
 					if arg[2:] not in self.valid_string_flags:
 						print("[ERR]: Unrecognized flag '" + str(arg[2:]) + "'")
-						return
+						return 1
 
-					#TODO: Add support for multi string flags.
+					if arg[2:] in self.special_string_flags:
+						print(eval("self.option_" + arg[2:].replace("-", "_") + "('')"))
+						return 1
+
 					if self.is_double_flag(arg[2:]) == True:
 						self.flags[arg[2:]] = ""
 						double_list.append(arg[2:])
+					elif self.is_multi_flag(arg[2:]) == True:
+						self.flags[arg[2:]] = []
+						multi_list.append(arg[2:])
 					else:
 						self.flags[arg[2:]] = ""
 					continue
@@ -107,7 +117,12 @@ class cmd_word_count(word_count):
 				for a in arg[1:]:
 					if a not in self.valid_flags:
 						print("[ERR]: Unrecognized flag '" + str(a) + "'")
-						return
+						return 1
+					
+					if a in self.special_flags:
+						print(eval("self.option_" + a.replace("-", "_") + "('')"))
+						return 1
+
 					if self.is_double_flag(a) == True:
 						self.flags[a] = ""
 						double_list.append(a)
@@ -119,19 +134,26 @@ class cmd_word_count(word_count):
 					continue
 				continue
 		# check if an argument:
+		for f in self.double_flags:
+			if self.flags.get(f) is not None and len(self.flags.get(f)) == 0:
+				print("[ERR]: Not all flags got values!")
+				print("[>>>]: " + str(double_list) + str(multi_list))
+				return 1
+
 		if len(double_list) != 0 and len(multi_list) != 0:
 			print("[ERR]: Not all flags got values!")
 			print("[>>>]: " + str(double_list) + str(multi_list))
-			return
+			return 1
+
+		return 0
 	
 	# check if a flag requires an argument.
 	def is_double_flag(self, flag):
 		if flag in self.double_flags:
 			return True
 		
-		#TODO: Add support for multi string flags.
-		# if flag in self.double_string_flags:
-		#	return True
+		if flag in self.double_string_flags:
+			return True
 
 		return False
 
@@ -144,13 +166,6 @@ class cmd_word_count(word_count):
 		#	return True
 
 		return False
-
-	def print_help(self):
-		f = open("./.help.txt", 'r')
-		for line in f:
-			#TODO: Add formatting.
-			print(line)
-		f.close()
 
 	def eval_flags(self, flags):
 		for n in self.necessary_flags:
@@ -166,7 +181,7 @@ class cmd_word_count(word_count):
 #					print(k + ": " + "--")
 #				else:
 #					print(k  + ": " + flags.get(k))
-				print(eval("self.option_" + k + "(\"" + str(flags.get(k)) + "\")"), end="")
+				print(eval("self.option_" + k.replace("-", "_") + "(\"" + str(flags.get(k)) + "\")"), end="")
 			print("")
 			del flags['f'][0]
 
@@ -178,6 +193,9 @@ class cmd_word_count(word_count):
 		print("[INF]: Loaded '" + args[0] + "'.")
 		return ""
 
+	def option_max_rows(self, args):
+		return self.option_R(args)
+
 	def option_R(self, args):
 		for c in args:
 			if ord(c) <= ord('9') and ord(c) >= ord('0'):
@@ -185,6 +203,7 @@ class cmd_word_count(word_count):
 			else:
 				print("[ERR]: 'R' expects an interger.")
 				return ""
+
 		self.max_rows = int(args)
 		return "Max Rows: " + str(args) + "\n"
 
@@ -226,7 +245,7 @@ class cmd_word_count(word_count):
 			+ str(statwords.get(k)) + " | ")
 			return_buffer.append("-" * (longest_key_len + longest_val_len + 3 + 4))
 		return_buffer[len(return_buffer) - 1] = ("+" + ("=" * (longest_key_len + longest_val_len + 3 + 2)) + "+")
-		return "\n".join(return_buffer) 
+		return "\n".join(return_buffer) + "\n" 
 
 	def option_bytes(self, args):
 		return self.option_b(args)
@@ -242,6 +261,15 @@ class cmd_word_count(word_count):
 		nchars = self.count_chars(self.getcontent())
 		return "Chars: " + str(nchars) + "\n"
 
+	def option_help(self, args):
+		return self.option_h(args)
+
+	def option_h(self, args):
+		f = open("./.help.txt", 'r')
+		helptext = f.read()
+		f.close()
+		return helptext
+
 cmd = cmd_word_count()
-cmd.parse(sys.argv)
-cmd.eval_flags(cmd.flags)
+if cmd.parse(sys.argv) == 0:
+	cmd.eval_flags(cmd.flags)
