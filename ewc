@@ -4,32 +4,48 @@ import sys
 import collections
 from ast import literal_eval
 
+# FOR EPR ONLY, REMOVE THIS.
+import tkinter as tk
+import tkinter.filedialog as tfiles
+
 class def_vars(object):
 	""" a class with all the variables """
-	valid_flags     = ['f', 'R', 'w', 'W', 'c', 'b', 'h'] # the priority in which flags are interpreted.
-	double_flags    = ['R']                # flags followed by ONE argument
+	valid_flags     = ['v', 'f', 'file', 'hell', 'R', 'w', 'W', 'c', 'b', 'h', 'E'] # the priority in whhellich flags are interpreted.
+	double_flags    = ['R', 'v', 'E']      # flags followed by ONE argument
 	multi_flags     = ['f']                # flags that can have multiple arguments (until the next flag)
-	necessary_flags = ['f']                # flags that have to be given
+	necessary_flags = ['f/file/hell']           # flags that have to be given
 	replace         = ['\n', '\t']         # replace these chars in normalize()
 	count_chars_exclude = [' ']            # do not count these chars in count_chars()
-	valid_string_flags  = ['bytes', 'chars', 'max-rows', 'help']
-	double_string_flags = ['max-rows']
+	valid_string_flags  = ['file', 'words', 'bytes', 'chars', 'max-rows', 'help', 'hell']
+	double_string_flags = ['file', 'max-rows']
+	multi_string_flags = ['file']
 
 	# only for help, version etc
 	special_flags = ['h']
-	special_string_flags = ['help']
+	special_string_flags = ['help', 'hell']
 	max_rows = -1
+	verbose_level = 2
 
 class word_count(def_vars):
 	""" in this class all the functions are stored which interact with the file """
 	def load_file(self, filepath):
-		try:
-			f = open(filepath, 'r')
-		except Exception as e:
-			print("[ERR]: Could not open file.")
-			return
+		file_formats = ['ascii', 'utf-8', 'utf-16']
+		for fformat in file_formats:
+			try:
+				f = open(filepath, 'r', encoding=fformat)
+			except Exception as e:
+				self.write_out("[ERR]: Could not open file.\n", 0)
+				return
+			try:
+				self.write_out("[INF]: Trying " + fformat + "...", 2)
+				self.filecontent = f.read()
+			except Exception as e:
+				self.write_out("failed!\n", 2)
+				continue
 
-		self.filecontent = f.read()
+			self.write_out("success!\n", 2)
+			break
+
 		f.close()
 
 	def normalize(self, text):
@@ -85,7 +101,7 @@ class cmd_word_count(word_count):
 
 			if len(double_list) != 0:
 				if "-" in arg:
-					print("[ERR]: Missing value for '" + str(double_list[0]) + "'!")
+					self.write_out("[ERR]: Missing value for '" + str(double_list[0]) + "'!\n", 0)
 					return 1
 				self.flags[double_list[0]] = arg
 				del double_list[0]
@@ -94,16 +110,14 @@ class cmd_word_count(word_count):
 			if arg[0] == "-":
 				# long flag. (e.g: --input)
 				if arg[1] == "-":
-					print("string flag!")
-					
 					if arg[2:] not in self.valid_string_flags:
-						print("[ERR]: Unrecognized flag '" + str(arg[2:]) + "'")
+						self.write_out("[ERR]: Unrecognized flag '" + str(arg[2:]) + "'", 0)
 						return 1
 
 					if arg[2:] in self.special_string_flags:
-						print(eval("self.option_" + arg[2:].replace("-", "_") + "('')"))
+						self.write_out(eval("self.option_" + arg[2:].replace("-", "_") + "('')"), 1)
 						return 1
-
+					print(arg[2:])
 					if self.is_double_flag(arg[2:]) == True:
 						self.flags[arg[2:]] = ""
 						double_list.append(arg[2:])
@@ -116,11 +130,11 @@ class cmd_word_count(word_count):
 				
 				for a in arg[1:]:
 					if a not in self.valid_flags:
-						print("[ERR]: Unrecognized flag '" + str(a) + "'")
+						self.write_out("[ERR]: Unrecognized flag '" + str(a) + "'", 2)
 						return 1
 					
 					if a in self.special_flags:
-						print(eval("self.option_" + a.replace("-", "_") + "('')"))
+						self.write_out(eval("self.option_" + a.replace("-", "_") + "('')"), 1)
 						return 1
 
 					if self.is_double_flag(a) == True:
@@ -136,13 +150,13 @@ class cmd_word_count(word_count):
 		# check if an argument:
 		for f in self.double_flags:
 			if self.flags.get(f) is not None and len(self.flags.get(f)) == 0:
-				print("[ERR]: Not all flags got values!")
-				print("[>>>]: " + str(double_list) + str(multi_list))
+				self.write_out("[ERR]: Not all flags got values!", 0)
+				self.write_out("[>>>]: " + str(double_list) + str(multi_list), 0)
 				return 1
 
 		if len(double_list) != 0 and len(multi_list) != 0:
-			print("[ERR]: Not all flags got values!")
-			print("[>>>]: " + str(double_list) + str(multi_list))
+			self.write_out("[ERR]: Not all flags got values!", 0)
+			self.write_out("[>>>]: " + str(double_list) + str(multi_list), 0)
 			return 1
 
 		return 0
@@ -162,35 +176,43 @@ class cmd_word_count(word_count):
 		if flag in self.multi_flags:
 			return True
 
-		#if flag in self.multi_string_flags:
-		#	return True
+		if flag in self.multi_string_flags:
+			return True
 
 		return False
 
 	def eval_flags(self, flags):
 		for n in self.necessary_flags:
-			if flags.get(n) is None:
-				print("[ERR]: Missing essential flag!")
-				print("[>>>]: " + n + " not found.")
+			flag_included = False
+			for s in n.split("/"):
+				if not flags.get(s) is None:
+					flag_included = True
+					break
+
+			if flag_included == False:
+				self.write_out("[ERR]: Missing essential flag!", 0)
+				self.write_out("[>>>]: " + n + " not found.", 0)
 				return
 
 		#TODO: dont make dependent on 'f'
-		while len(flags.get('f')) > 0:
+		while (len(flags.get('file')) > 0) if (flags.get('f') is None) else (len(flags.get('f')) > 0):
 			for k in self.flags:
 #				if flags.get(k) == "":
 #					print(k + ": " + "--")
 #				else:
 #					print(k  + ": " + flags.get(k))
-				print(eval("self.option_" + k.replace("-", "_") + "(\"" + str(flags.get(k)) + "\")"), end="")
+				self.write_out(eval("self.option_" + k.replace("-", "_") + "(\"" + str(flags.get(k)) + "\")"), 1)
 			print("")
 			del flags['f'][0]
 
 	# === All the options in functions ===
+	def option_file(self, args):
+		return self.option_f("\"" + args + "\"")
+
 	def option_f(self, args):
 		args = literal_eval(args)
 		self.load_file(args[0])
-		self.flags["f"][0]
-		print("[INF]: Loaded '" + args[0] + "'.")
+		self.write_out("[INF]: Loaded '" + args[0] + "'.", 1)
 		return ""
 
 	def option_max_rows(self, args):
@@ -201,11 +223,14 @@ class cmd_word_count(word_count):
 			if ord(c) <= ord('9') and ord(c) >= ord('0'):
 				pass
 			else:
-				print("[ERR]: 'R' expects an interger.")
+				self.write_out("[ERR]: 'R' expects an interger.", 2)
 				return ""
 
 		self.max_rows = int(args)
 		return "Max Rows: " + str(args) + "\n"
+
+	def option_words(self, args):
+		return self.option_w(args)
 
 	def option_w(self, args):
 		nwords = self.count_words(self.getcontent())
@@ -261,6 +286,10 @@ class cmd_word_count(word_count):
 		nchars = self.count_chars(self.getcontent())
 		return "Chars: " + str(nchars) + "\n"
 
+	def option_hell(self, args):
+		self.tk_call(tfiles.askopenfilename(title="nein. einfach nein."))
+		return "no."
+
 	def option_help(self, args):
 		return self.option_h(args)
 
@@ -269,6 +298,28 @@ class cmd_word_count(word_count):
 		helptext = f.read()
 		f.close()
 		return helptext
+
+	def option_v(self, args):
+		for c in args:
+			if ord(c) <= ord('9') and ord(c) >= ord('0'):
+				pass
+			else:
+				self.write_out("[ERR]: 'v' expects an interger.", 2)
+				return ""
+
+		self.verbose_level = int(args)
+		return "Verbose Level: " + str(args) + "\n"
+
+	def tk_call(self, args):
+		self.load_file(args)
+		print("WORDS: " + str(self.count_words(self.getcontent())))
+		print("CHARS: " + str(self.count_chars(self.getcontent())))
+		print("BYTES: " + str(self.count_bytes(self.getcontent())))
+		return
+
+	def write_out(self, string, level):
+		if level <= self.verbose_level:
+			print(string, end="")
 
 cmd = cmd_word_count()
 if cmd.parse(sys.argv) == 0:
