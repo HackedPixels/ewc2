@@ -1,1 +1,2 @@
-# ewc2
+# Extended Word Count
+

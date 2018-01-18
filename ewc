@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 
 import sys
+import os
+import time
+import subprocess
 import collections
 from ast import literal_eval
 
@@ -16,7 +19,7 @@ class def_vars(object):
 	necessary_flags = ['f/file/hell']           # flags that have to be given
 	replace         = ['\n', '\t']         # replace these chars in normalize()
 	count_chars_exclude = [' ']            # do not count these chars in count_chars()
-	valid_string_flags  = ['file', 'words', 'bytes', 'chars', 'max-rows', 'help', 'hell']
+	valid_string_flags  = ['file', 'words', 'bytes', 'chars', 'max-rows', 'help', 'hell', 'graphical']
 	double_string_flags = ['file', 'max-rows']
 	multi_string_flags = ['file']
 
@@ -29,7 +32,7 @@ class def_vars(object):
 class word_count(def_vars):
 	""" in this class all the functions are stored which interact with the file """
 	def load_file(self, filepath):
-		file_formats = ['ascii', 'utf-8', 'utf-16']
+		file_formats = ['ascii', 'utf-8', 'utf-16', 'utf-32']
 		for fformat in file_formats:
 			try:
 				f = open(filepath, 'r', encoding=fformat)
@@ -320,6 +323,15 @@ class cmd_word_count(word_count):
 	def write_out(self, string, level):
 		if level <= self.verbose_level:
 			print(string, end="")
+
+	def option_graphical(self, args):
+		while True:
+			print("\033[2J")
+			print("\033[1;1H" + "[\033[41m" + str(subprocess.run(["pwd"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\n", "") + "\033[0m]")
+			print("\033[2;1H" + str(subprocess.run(["ls", "-cG"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\\n", "\n"))
+			input("==>")
+		return "lel."
+		
 
 cmd = cmd_word_count()
 if cmd.parse(sys.argv) == 0:
