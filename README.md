@@ -16,21 +16,4 @@
   * chars - same as 'c'
 
 **JSON**
-  * Format:
-    * words      - number of words
-    * chars      - number of chars
-    * kbd\_hits   - number of keyboard hits
-    * stat\_bytes - dict of statistics of bytes
-    * stat\_words - dict of statistics of words
-    * avg\_word\_len - average word length
-
-  * How to load:
-    ```python3
-    import json
-    
-    f = open("example.json", 'r')
-    data = json.load(f)
-    f.close()
-
-    print(data["words"])
-    ```
+	* 

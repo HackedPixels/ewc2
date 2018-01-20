@@ -1,5 +1,9 @@
 #!/usr/bin/python3
 
+__author__ = "6765802: Jan Köppen, 6731577: Niclas Creß"
+__email__  = "jan@koeppen.name, niclas.cress@gmx.net"
+__credits__= "n/a"
+
 import sys
 import json
 import os
@@ -130,6 +134,10 @@ class word_count(def_vars):
 
 		return byte_stat
 	
+	def avg_word_len(self, text):
+		nwords = self.count_words(text)
+		return self.count_chars / self.count_words
+
 	def getcontent(self):
 		return self.filecontent
 
@@ -339,7 +347,7 @@ class cmd_word_count(word_count):
 
 	def option_hell(self, args):
 		self.tk_call(tfiles.askopenfilename(title="nein. einfach nein."))
-		return "no."
+		raise SystemExit
 
 	def option_help(self, args):
 		return self.option_h(args)
@@ -363,12 +371,17 @@ class cmd_word_count(word_count):
 
 	def tk_call(self, args):
 		self.load_file(args)
+
 		print("WORDS: " + str(self.count_words(self.getcontent())))
 		print("CHARS: " + str(self.count_chars(self.getcontent())))
 		print("BYTES: " + str(self.count_bytes(self.getcontent())))
 		print("STAT_BYTES: " + str(self.stat_bytes(self.getcontent())))
+		print("STAT_WORDS: " + str(self.stat_words(self.getcontent())))
+		print("AVG_WORD_LEN: " + str(self.avg_word_len(self.getcontent())))
 
-		return
+		self.option_E(args + ".json")
+		
+		raise SystemExit
 
 	def write_out(self, string, level):
 		if level <= self.verbose_level:
@@ -394,11 +407,13 @@ class cmd_word_count(word_count):
 		store_dict["words"] = self.count_words(self.getcontent())
 		store_dict["chars"] = self.count_chars(self.getcontent())
 		store_dict["kbd_hits"] = self.count_hits(self.getcontent())
+		store_dict["avg_word_len"] = self.avg_word_len(self.getcontent())
 		store_dict["stat_words"] = self.stat_words(self.getcontent())
 		store_dict["stat_bytes"] = self.stat_bytes(self.getcontent())
 		f = open(str(args), "w")
 		json.dump(store_dict, f, separators=(',', ':'), ensure_ascii=True)
 		f.close()
+
 		return "stored '" + str(args) + "'\n"
 
 	def option_A(self, args):
@@ -436,9 +451,9 @@ class cmd_word_count(word_count):
 				try:
 					print(os.path.join(os.getcwd(), command))
 					if os.path.isfile(os.path.join(os.getcwd(), command)):
-						if input("use? [Y/n]") != "n":
-							self.tk_call(os.path.join(os.getcwd(), command))
-							return "done."
+						print("AAAAA")
+						self.tk_call(os.path.join(os.getcwd(), command))
+						raise SystemExit
 					os.chdir(command)
 				except Exception as e:
 					print("nope.")
