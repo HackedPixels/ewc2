@@ -1,7 +1,9 @@
 #!/usr/bin/python3
 
 import sys
+import json
 import os
+import readline
 import time
 import subprocess
 import collections
@@ -13,7 +15,8 @@ import tkinter.filedialog as tfiles
 
 class def_vars(object):
 	""" a class with all the variables """
-	valid_flags     = ['v', 'f', 'file', 'hell', 'R', 'w', 'W', 'c', 'b', 'h', 'E'] # the priority in whhellich flags are interpreted.
+	# the priority in which flags are interpreted.
+	valid_flags     = ['v', 'f', 'file', 'hell', 'E', 'R', 'w', 'W', 'A', 'c', 'b', 'B', 'h']
 	double_flags    = ['R', 'v', 'E']      # flags followed by ONE argument
 	multi_flags     = ['f']                # flags that can have multiple arguments (until the next flag)
 	necessary_flags = ['f/file/hell']           # flags that have to be given
@@ -65,7 +68,7 @@ class word_count(def_vars):
 				word_count += 1
 		
 		return word_count
-		
+
 	def count_chars(self, text):
 		char_counter = 0
 		for c in text:
@@ -77,6 +80,36 @@ class word_count(def_vars):
 	def count_bytes(self, text):
 		return len(text)
 
+	def count_hits(self, text):
+		small_characters_counter = 0
+		big_characters_counter = 0
+
+		for c in text:
+			if ord(c) >= ord("A") and ord(c) <= ord("Z"):
+				big_characters_counter += 1
+				continue
+
+			if ord(c) >= ord("!") and ord(c) <= ord("*"):
+				big_characters_counter += 1
+				continue
+
+			if ord(c) == ord("/"):
+				big_characters_counter += 1
+				continue
+        		
+			if ord(c) == ord(":") and ord(c) == ord(";"):
+				big_characters_counter += 1
+				continue
+
+			if ord(c) == ord("=") and ord(c) == ord("?"):
+				big_characters_counter += 1
+				continue
+			
+			small_characters_counter += 1
+
+		big_characters_counter *= 2
+		return (big_characters_counter + small_characters_counter)
+
 	def stat_words(self, text):
 		word_stat = {}
 		for w in self.normalize(text).split(" "):
@@ -86,11 +119,26 @@ class word_count(def_vars):
 				word_stat[w] += 1
 
 		return word_stat
+
+	def stat_bytes(self, text):
+		byte_stat = {}
+		for b in text:
+			if byte_stat.get(b) is None:
+				byte_stat[b] = 1
+			else:
+				byte_stat[b] += 1
+
+		return byte_stat
 	
 	def getcontent(self):
 		return self.filecontent
 
 class cmd_word_count(word_count):
+	def __init__(self):
+		readline.set_completer(self.tab_complete)
+		readline.parse_and_bind('tab: complete')
+
+
 	def parse(self, args):
 		self.flags = collections.OrderedDict()
 		double_list = []
@@ -153,8 +201,8 @@ class cmd_word_count(word_count):
 		# check if an argument:
 		for f in self.double_flags:
 			if self.flags.get(f) is not None and len(self.flags.get(f)) == 0:
-				self.write_out("[ERR]: Not all flags got values!", 0)
-				self.write_out("[>>>]: " + str(double_list) + str(multi_list), 0)
+				self.write_out("[ERR]: Not all flags got values!\n", 0)
+				self.write_out("[>>>]: " + str(double_list) + str(multi_list) + "\n", 0)
 				return 1
 
 		if len(double_list) != 0 and len(multi_list) != 0:
@@ -215,7 +263,7 @@ class cmd_word_count(word_count):
 	def option_f(self, args):
 		args = literal_eval(args)
 		self.load_file(args[0])
-		self.write_out("[INF]: Loaded '" + args[0] + "'.", 1)
+		self.write_out("[INF]: Loaded '" + args[0] + "'.\n", 1)
 		return ""
 
 	def option_max_rows(self, args):
@@ -307,7 +355,7 @@ class cmd_word_count(word_count):
 			if ord(c) <= ord('9') and ord(c) >= ord('0'):
 				pass
 			else:
-				self.write_out("[ERR]: 'v' expects an interger.", 2)
+				self.write_out("[ERR]: 'v' expects an interger.\n", 2)
 				return ""
 
 		self.verbose_level = int(args)
@@ -318,18 +366,82 @@ class cmd_word_count(word_count):
 		print("WORDS: " + str(self.count_words(self.getcontent())))
 		print("CHARS: " + str(self.count_chars(self.getcontent())))
 		print("BYTES: " + str(self.count_bytes(self.getcontent())))
+		print("STAT_BYTES: " + str(self.stat_bytes(self.getcontent())))
+
 		return
 
 	def write_out(self, string, level):
 		if level <= self.verbose_level:
 			print(string, end="")
 
+	def tab_set(self, options):
+		self.options = sorted(options)
+
+	def tab_complete(self, text, state):
+		if state == 0:
+			if text:
+				self.matches = [s for s in self.options if s and s.startswith(text)]
+			else:
+				self.matches = self.options[:]
+
+		try:
+			return self.matches[state]
+		except IndexError:
+			return None
+
+	def option_E(self, args):
+		store_dict = {}
+		store_dict["words"] = self.count_words(self.getcontent())
+		store_dict["chars"] = self.count_chars(self.getcontent())
+		store_dict["kbd_hits"] = self.count_hits(self.getcontent())
+		store_dict["stat_words"] = self.stat_words(self.getcontent())
+		store_dict["stat_bytes"] = self.stat_bytes(self.getcontent())
+		f = open(str(args), "w")
+		json.dump(store_dict, f, separators=(',', ':'), ensure_ascii=True)
+		f.close()
+		return "stored '" + str(args) + "'\n"
+
+	def option_A(self, args):
+		nhits = self.count_hits(self.getcontent())
+		return "Keyboard Hits: " + str(nhits) + ".\n"
+
 	def option_graphical(self, args):
+		os.chdir(self.flags['f'][0])
 		while True:
 			print("\033[2J")
-			print("\033[1;1H" + "[\033[41m" + str(subprocess.run(["pwd"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\n", "") + "\033[0m]")
-			print("\033[2;1H" + str(subprocess.run(["ls", "-cG"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\\n", "\n"))
-			input("==>")
+			#print("\033[1;1H" + "[\033[41m" + str(subprocess.run(["pwd"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\n", "") + "\033[0m]")
+			print("\033[1;1H" + "[\033[41m" + str(os.getcwd()) + "\033[0m]")
+			#print("\033[2;1H" + str(subprocess.run(["ls", "-cG"], stdout=subprocess.PIPE).stdout)[2:-3].replace("\\n", "\n"))
+			folder_list = list()
+			file_list = list()
+			for f in os.listdir(str(os.getcwd())):
+				if os.path.isfile(os.path.join(os.getcwd(), f)):
+					file_list.append(f)
+				else:
+					folder_list.append(f)
+
+			self.tab_set(folder_list + file_list)
+			#print("\033[2;1H" + "\n".join(os.listdir(str(os.getcwd()))) + "\033[0m")
+			print("[FOLDERS]")
+			for f in folder_list:
+				print("\033[34;7m" + f + "\033[0m" + "/")
+			print("\n[HEADERS]")
+			for f in file_list:
+				print(f)
+			command = input("\n\n'<<' to go one folder up\n\033[7mchange to> \033[0m").strip()
+
+			if command == "<<":
+				os.chdir("/".join(os.getcwd().split("/")[:-1]))
+			else:
+				try:
+					print(os.path.join(os.getcwd(), command))
+					if os.path.isfile(os.path.join(os.getcwd(), command)):
+						if input("use? [Y/n]") != "n":
+							self.tk_call(os.path.join(os.getcwd(), command))
+							return "done."
+					os.chdir(command)
+				except Exception as e:
+					print("nope.")
 		return "lel."
 		
 
